@@ -1,6 +1,6 @@
 #[macro_use] extern crate rocket;
 use rocket::serde::{json::Json, Deserialize, Serialize};
-use std::{fs::OpenOptions, io::{BufRead, BufReader, Write}};
+use std::{fs::{OpenOptions, File}, io::{BufRead, BufReader, Write}};
 
 #[get("/")]
 fn index() -> &'static str {
@@ -9,7 +9,7 @@ fn index() -> &'static str {
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![index, add_task, delete_task, edit_task])
+    rocket::build().mount("/", routes![index, read_tasks, add_task, delete_task, edit_task])
 }
 
 
@@ -22,14 +22,14 @@ struct Task<'r> {
 
 #[post("/addtask", data="<task>")]
 fn add_task(task: Json<Task<'_>>) -> &'static str {
-    let mut tasks = OpenOptions::new()
+    let mut tasks: File = OpenOptions::new()
                     .read(true)
                     .append(true)
                     .create(true)
                     .open("tasks.txt")
                     .expect("unable to access tasks.txt");   
-    let task_item_string = format!("{}\n", task.item);
-    let task_item_bytes = task_item_string.as_bytes();
+    let task_item_string: String = format!("{}\n", task.item);
+    let task_item_bytes: &[u8] = task_item_string.as_bytes();
     tasks.write(task_item_bytes).expect("unable to write to tasks.txt");
     "Task added succesfully"
 }
@@ -38,15 +38,15 @@ fn add_task(task: Json<Task<'_>>) -> &'static str {
 
 #[get("/readtasks")]
 fn read_tasks() -> Json<Vec<String>> {
-    let tasks = OpenOptions::new()
+    let tasks: File = OpenOptions::new()
                     .read(true)
                     .append(true)
                     .create(true)
                     .open("tasks.txt")
                     .expect("unable to access tasks.txt");  
-    let reader = BufReader::new(tasks);
+    let reader: BufReader<File> = BufReader::new(tasks);
     Json(reader.lines()
-            .map(|line| line.expect("could not read line"))
+            .map(|line: Result<String, std::io::Error>| line.expect("could not read line"))
             .collect())
 }
 
@@ -59,20 +59,20 @@ struct TaskUpdate<'r> {
 
 #[put("/edittask", data="<task_update>")]
 fn edit_task(task_update: Json<TaskUpdate<'_>>) -> &'static str {
-    let tasks = OpenOptions::new()
+    let tasks: File = OpenOptions::new()
                     .read(true)
                     .append(true)
                     .create(true)
                     .open("tasks.txt")
                     .expect("unable to access tasks.txt");  
-    let mut temp = OpenOptions::new()
+    let mut temp: File = OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open("temp.txt")
                     .expect("unable to access temp.txt");
                     
-    let reader = BufReader::new(tasks);
+    let reader: BufReader<std::fs::File> = BufReader::new(tasks);
     for line in reader.lines() {
         let line_string: String = line.expect("could not read line");
         let line_pieces: Vec<&str> = line_string.split(",").collect();
@@ -83,7 +83,7 @@ fn edit_task(task_update: Json<TaskUpdate<'_>>) -> &'static str {
             temp.write(task.as_bytes()).expect("could not write to temp file");
         }
         else {
-            let task = format!("{}\n", line_string);
+            let task: String = format!("{}\n", line_string);
             temp.write(task.as_bytes()).expect("could not write to temp file");
         }
     }
@@ -101,20 +101,20 @@ struct TaskId {
 
 #[delete("/deletetask", data="<task_id>")]
 fn delete_task(task_id: Json<TaskId>) -> &'static str {
-    let tasks = OpenOptions::new()
+    let tasks: std::fs::File = OpenOptions::new()
                     .read(true)
                     .append(true)
                     .create(true)
                     .open("tasks.txt")
                     .expect("unable to access tasks.txt");  
-    let mut temp = OpenOptions::new()
+    let mut temp: std::fs::File = OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open("temp.txt")
                     .expect("unable to access temp.txt");
                     
-    let reader = BufReader::new(tasks);
+    let reader: BufReader<std::fs::File> = BufReader::new(tasks);
     
     for line in reader.lines() {
         let line_string: String = line.expect("could not read line");
